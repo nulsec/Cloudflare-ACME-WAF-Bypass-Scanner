@@ -1,0 +1,65 @@
+# Cloudflare Scanner Configuration
+# Copy this file to config.yaml and fill in your API keys
+
+# ============================================
+# LLM PROVIDER SETTINGS
+# ============================================
+
+llm:
+  # Default provider: openai, anthropic, ollama, groq, gemini
+  provider: gemini
+  
+  # OpenAI Configuration
+  openai:
+    api_key: ""  # or set OPENAI_API_KEY env var
+    model: "gpt-4o"
+    base_url: "https://api.openai.com/v1/chat/completions"
+  
+  # Anthropic Claude Configuration
+  anthropic:
+    api_key: ""  # or set ANTHROPIC_API_KEY env var
+    model: "claude-3-5-sonnet-20241022"
+    base_url: "https://api.anthropic.com/v1/messages"
+  
+  # Ollama (Local) Configuration
+  ollama:
+    model: "llama3.2"
+    base_url: "http://localhost:11434/api/generate"
+  
+  # Groq Configuration
+  groq:
+    api_key: ""  # or set GROQ_API_KEY env var
+    model: "llama-3.3-70b-versatile"
+    base_url: "https://api.groq.com/openai/v1/chat/completions"
+  
+  # Google Gemini Configuration
+  gemini:
+    api_key: ""
+    model: "gemini-2.0-flash"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/models"
+
+# ============================================
+# SCANNER SETTINGS
+# ============================================
+
+scanner:
+  threads: 10
+  timeout: 10
+  delay: 0
+  verbose: false
+  
+# ============================================
+# POC GENERATION SETTINGS
+# ============================================
+
+poc:
+  enabled: true
+  output_dir: "pocs"
+
+# ============================================
+# OUTPUT SETTINGS
+# ============================================
+
+output:
+  results_file: "results.json"
+  analysis_file: "analysis.md"

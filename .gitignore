@@ -1,0 +1,30 @@
+# Config with API keys - DO NOT COMMIT
+config.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Generated POCs (optional - uncomment to exclude)
+# pocs/
+
+# Results
+results.json
+analysis.md
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
