@@ -47,6 +47,38 @@ scanner:
   timeout: 10
   delay: 0
   verbose: false
+
+# ============================================
+# OAST (Out-of-band Application Security Testing)
+# ============================================
+# OAST is used to detect blind vulnerabilities like:
+# - Blind SSRF (Server-Side Request Forgery)
+# - Blind XSS (Cross-Site Scripting)
+# - Blind RCE (Remote Code Execution)
+# - XXE (XML External Entity) Out-of-band
+# - Log4Shell/JNDI Injection
+# - DNS exfiltration
+#
+# How it works:
+# 1. Scanner sends payloads with callback URLs to target
+# 2. If vulnerable, target makes request to callback server
+# 3. Scanner detects the callback = vulnerability confirmed
+#
+# Options:
+# - Use Interactsh (free, public): --oast
+# - Use your own server: --oast --oast-domain your-server.com
+# - Start local callback server: --oast-server-mode
+
+oast:
+  enabled: true              # Enable OAST by default
+  server: ""                  # Interactsh server (empty = random from pool)
+  domain: ""                  # Custom callback domain (your own server)
+  poll_interval: 5            # Seconds between polling for callbacks
+  wait_time: 30               # Seconds to wait for callbacks after scan
+  
+  # Available Interactsh servers (used if server is empty):
+  # - oast.pro, oast.live, oast.site, oast.online
+  # - oast.fun, oast.me, interact.sh
   
 # ============================================
 # POC GENERATION SETTINGS

