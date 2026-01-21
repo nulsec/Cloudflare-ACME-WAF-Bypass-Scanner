@@ -109,6 +109,20 @@ class OASTClient:
             'domain': f"{payload_id}.{self.callback_domain}"
         }
     
+    def get_callback_url(self, payload_type='generic'):
+        """Get a simple callback URL for use in payloads"""
+        payload_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        
+        with self.payload_lock:
+            self.payload_tracker[payload_id] = {
+                'target': 'unknown',
+                'payload_type': payload_type,
+                'timestamp': time.time(),
+                'triggered': False
+            }
+        
+        return f"http://{payload_id}.{self.callback_domain}/"
+    
     def get_oast_payloads(self, target):
         """Generate OAST-enabled payloads for various vulnerability types"""
         payload_info = self.generate_payload(target, 'mixed')

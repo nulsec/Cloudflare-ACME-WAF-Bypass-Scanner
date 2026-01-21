@@ -17,6 +17,7 @@ from colorama import Fore, Style
 from utils.constants import USER_AGENTS, FRAMEWORK_SIGNATURES
 from utils.payloads import (
     ACTUATOR_PAYLOADS, PHP_LFI_PAYLOADS, NEXTJS_PAYLOADS,
+    NEXTJS_RSC_RCE_PAYLOADS, NEXTJS_RSC_BYPASS_HEADERS, NEXTJS_RSC_POST_PAYLOADS,
     CF_WAF_BYPASS_PAYLOADS, CF_CACHE_POISON_PAYLOADS, CF_BYPASS_PATHS,
     HOST_HEADER_PAYLOADS, RATE_LIMIT_BYPASS_HEADERS, SENSITIVE_PATHS,
     GRAPHQL_PAYLOADS, BYPASS_HEADERS
@@ -618,6 +619,224 @@ class CloudflareScanner:
                                 'interesting': True
                             })
                         
+                except requests.RequestException:
+                    pass
+            
+            # Step 5.1: Test Next.js RSC RCE (CVE-2024-34351, CVE-2025-55182, CVE-2025-66478)
+            print(f"  {Fore.CYAN}[*] Testing Next.js RSC/RCE vulnerabilities (CVE-2024-34351, CVE-2025-55182, CVE-2025-66478)...{Style.RESET_ALL}")
+            
+            # Test RSC payloads with bypass headers
+            nextjs_rsc_payloads = self.generate_payloads_with_token(NEXTJS_RSC_RCE_PAYLOADS, token)
+            
+            for bypass_header in NEXTJS_RSC_BYPASS_HEADERS:
+                for payload in nextjs_rsc_payloads:
+                    if self.delay > 0:
+                        time.sleep(self.delay)
+                    
+                    url = target + payload
+                    test_headers = headers.copy()
+                    test_headers.update(bypass_header)
+                    
+                    try:
+                        resp = self.session.get(url, headers=test_headers, timeout=self.timeout,
+                                               allow_redirects=False, verify=False)
+                        
+                        content = resp.text.lower()
+                        content_type = resp.headers.get('content-type', '').lower()
+                        
+                        # Check for RSC/RCE indicators
+                        rce_indicators = [
+                            # Server Action responses
+                            '__next_action', 'next-action', 'server action',
+                            # Internal data exposure
+                            'internal server error', 'middleware', 'x-middleware',
+                            # Source/config leak
+                            'webpack', 'module.exports', 'process.env',
+                            'api_key', 'secret', 'password', 'token',
+                            # File system leak
+                            '/app/', '/pages/', '/src/', 'node_modules',
+                            # RSC Flight data
+                            '$undefined', '$l', '$@',
+                        ]
+                        
+                        # CVE-2025-55182: RSC Streaming indicators
+                        rsc_stream_indicators = [
+                            'text/x-component', 'application/octet-stream',
+                            '$sreact.suspense', 'react.suspense',
+                            '__flight__', '_rsc', '.rsc',
+                            'async-boundary', 'suspense-boundary',
+                        ]
+                        
+                        # CVE-2025-66478: Server Actions Deserialization indicators
+                        deser_indicators = [
+                            'server-reference-manifest', 'action-id',
+                            'server-action', '__server_action__',
+                            'form-action', 'action-encrypted',
+                            'closure-id', 'bound-args',
+                        ]
+                        
+                        vuln_indicators = [
+                            # Direct code execution signs
+                            'rce', 'command', 'exec', 'spawn', 'eval',
+                            # SSRF success
+                            'localhost', '127.0.0.1', '169.254.169.254',
+                            # Middleware bypass success
+                            'bypassed', 'middleware skipped',
+                            # Deserialization success
+                            '__proto__', 'prototype', 'constructor',
+                        ]
+                        
+                        # Detect CVE type based on indicators and headers
+                        detected_cve = 'CVE-2024-34351'  # default
+                        
+                        if any(ind in content for ind in rsc_stream_indicators) or 'text/x-component' in content_type:
+                            detected_cve = 'CVE-2025-55182'
+                        elif any(ind in content for ind in deser_indicators) or any(h in str(bypass_header).lower() for h in ['action', 'server-action']):
+                            detected_cve = 'CVE-2025-66478'
+                        
+                        # Check for middleware bypass success
+                        middleware_bypassed = (
+                            resp.status_code == 200 and 
+                            'x-middleware-subrequest' in str(bypass_header) and
+                            baseline_resp.status_code in [401, 403, 404]
+                        )
+                        
+                        if middleware_bypassed:
+                            header_name = ', '.join(f"{k}={v}" for k, v in bypass_header.items())
+                            print(f"  {Fore.RED}[CRITICAL]{Style.RESET_ALL} Next.js Middleware Bypass ({detected_cve})!")
+                            print(f"    └── URL: {url[:80]}")
+                            print(f"    └── Header: {header_name}")
+                            
+                            results['findings'].append({
+                                'type': 'Next.js RSC Middleware Bypass',
+                                'url': url,
+                                'status_code': resp.status_code,
+                                'length': len(resp.content),
+                                'bypass_header': bypass_header,
+                                'vulnerable': True,
+                                'critical': True,
+                                'cve': detected_cve
+                            })
+                        
+                        # Check for RSC Streaming RCE (CVE-2025-55182)
+                        elif 'text/x-component' in content_type or any(ind in content for ind in rsc_stream_indicators):
+                            if resp.status_code == 200:
+                                print(f"  {Fore.RED}[CRITICAL]{Style.RESET_ALL} Next.js RSC Streaming Exposed (CVE-2025-55182)!")
+                                print(f"    └── URL: {url[:80]}")
+                                print(f"    └── Content-Type: {content_type}")
+                                
+                                results['findings'].append({
+                                    'type': 'Next.js RSC Streaming RCE',
+                                    'url': url,
+                                    'status_code': resp.status_code,
+                                    'length': len(resp.content),
+                                    'content_type': content_type,
+                                    'vulnerable': True,
+                                    'critical': True,
+                                    'cve': 'CVE-2025-55182'
+                                })
+                        
+                        # Check for Server Actions Deserialization (CVE-2025-66478)
+                        elif any(ind in content for ind in deser_indicators):
+                            if resp.status_code == 200:
+                                found_deser = [ind for ind in deser_indicators if ind in content]
+                                print(f"  {Fore.RED}[CRITICAL]{Style.RESET_ALL} Next.js Server Actions Exposed (CVE-2025-66478)!")
+                                print(f"    └── URL: {url[:80]}")
+                                print(f"    └── Indicators: {', '.join(found_deser[:3])}")
+                                
+                                results['findings'].append({
+                                    'type': 'Next.js Server Actions Deserialization',
+                                    'url': url,
+                                    'status_code': resp.status_code,
+                                    'length': len(resp.content),
+                                    'indicators': found_deser,
+                                    'vulnerable': True,
+                                    'critical': True,
+                                    'cve': 'CVE-2025-66478'
+                                })
+                        
+                        # Check for sensitive data exposure
+                        elif resp.status_code == 200:
+                            found_indicators = [ind for ind in rce_indicators if ind in content]
+                            
+                            if found_indicators:
+                                severity = 'CRITICAL' if any(v in content for v in vuln_indicators) else 'HIGH'
+                                header_name = ', '.join(f"{k}={v}" for k, v in bypass_header.items())
+                                
+                                print(f"  {Fore.RED}[{severity}]{Style.RESET_ALL} Next.js RSC Data Exposure ({detected_cve})")
+                                print(f"    └── URL: {url[:80]}")
+                                print(f"    └── Indicators: {', '.join(found_indicators[:3])}")
+                                
+                                results['findings'].append({
+                                    'type': 'Next.js RSC RCE',
+                                    'url': url,
+                                    'status_code': resp.status_code,
+                                    'length': len(resp.content),
+                                    'bypass_header': bypass_header,
+                                    'indicators': found_indicators,
+                                    'vulnerable': True,
+                                    'critical': severity == 'CRITICAL',
+                                    'cve': detected_cve
+                                })
+                        
+                        # Check for source map exposure (info disclosure)
+                        elif '.map' in payload and resp.status_code == 200:
+                            if 'sourcescontent' in content or 'mappings' in content:
+                                print(f"  {Fore.YELLOW}[HIGH]{Style.RESET_ALL} Source Map Exposed: {url[:60]}...")
+                                
+                                results['findings'].append({
+                                    'type': 'Next.js Source Map Exposure',
+                                    'url': url,
+                                    'status_code': resp.status_code,
+                                    'length': len(resp.content),
+                                    'vulnerable': True
+                                })
+                                
+                    except requests.RequestException:
+                        pass
+            
+            # Test POST-based Server Actions
+            for post_payload in NEXTJS_RSC_POST_PAYLOADS:
+                if self.delay > 0:
+                    time.sleep(self.delay)
+                
+                url = target + post_payload['path']
+                post_headers = headers.copy()
+                post_headers.update(post_payload['headers'])
+                
+                # Replace callback placeholder if OAST is enabled
+                body = post_payload.get('body')
+                if body and self.oast_client:
+                    callback_url = self.oast_client.get_callback_url('nextjs-rsc')
+                    body = body.replace('{callback}', callback_url)
+                
+                try:
+                    if body:
+                        resp = self.session.post(url, headers=post_headers, data=body,
+                                                timeout=self.timeout, allow_redirects=False, verify=False)
+                    else:
+                        resp = self.session.get(url, headers=post_headers,
+                                               timeout=self.timeout, allow_redirects=False, verify=False)
+                    
+                    # Check for Server Action response
+                    if resp.status_code == 200:
+                        content_type = resp.headers.get('content-type', '')
+                        
+                        if 'text/x-component' in content_type or any(x in resp.text for x in ['$', 'undefined']):
+                            print(f"  {Fore.RED}[CRITICAL]{Style.RESET_ALL} Next.js Server Action accessible!")
+                            print(f"    └── URL: {url}")
+                            
+                            results['findings'].append({
+                                'type': 'Next.js Server Action RCE',
+                                'url': url,
+                                'status_code': resp.status_code,
+                                'content_type': content_type,
+                                'method': 'POST' if body else 'GET',
+                                'vulnerable': True,
+                                'critical': True,
+                                'cve': 'CVE-2024-34351'
+                            })
+                            
                 except requests.RequestException:
                     pass
             
