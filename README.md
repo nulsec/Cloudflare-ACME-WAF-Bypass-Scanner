@@ -102,7 +102,7 @@ This tool is created **ONLY** for:
 
 ```bash
 # Clone repository
-git clone https://github.com/adhaikal/Cloudflare-ACME-WAF-Bypass-Scanner.git
+git clone https://github.com/nulsec/Cloudflare-ACME-WAF-Bypass-Scanner.git
 cd Cloudflare-ACME-WAF-Bypass-Scanner
 
 # Install dependencies
