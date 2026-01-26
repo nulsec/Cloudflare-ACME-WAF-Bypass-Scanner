@@ -1,16 +1,22 @@
 # Cloudflare ACME Challenge WAF Bypass Scanner
 
-## 🆕 Update v2.1 (January 2026)
+## 🆕 Update v2.2 (January 2026)
 
 ### New Features:
-- ✨ **Modular Payloads Architecture** - 900+ payloads dipecah menjadi 13 file terpisah
-- 🚀 **Next.js RSC RCE** - CVE-2024-34351, CVE-2025-55182, CVE-2025-66478 dengan 150+ payloads
-- 🔄 **Improved OAST** - Better Out-of-band testing dengan multiple Interactsh servers
+- 🎯 **SPA False Positive Detection** - Automatically detects React/Vue/Angular SPA catch-all routing and filters false positives
+- ✨ **Modular Payloads Architecture** - 900+ payloads split into 13 separate files
+- 🚀 **Next.js RSC RCE** - CVE-2024-34351, CVE-2025-55182, CVE-2025-66478 with 150+ payloads
+- 🔄 **Improved OAST** - Better Out-of-band testing with multiple Interactsh servers
 - 🎯 **Enhanced Origin IP Discovery** - DNS history via hackertarget.com API
 - 🧠 **Multi-LLM Support** - OpenAI, Anthropic, Ollama, Groq, Gemini
 - 📝 **Auto POC Generation** - Python, Bash, Nuclei, Burp Suite templates
 - ⚡ **Comprehensive WAF Bypass** - URL encoding, Unicode, null bytes, case manipulation
-- 🛡️ **Rate Limit Bypass Testing** - 100+ header variations untuk IP spoofing
+- 🛡️ **Rate Limit Bypass Testing** - 100+ header variations for IP spoofing
+
+### v2.2 Changes:
+- **SPA Detection**: Scanner now detects Single Page Applications (React, Vue, Angular) that use catch-all routing
+- **False Positive Filtering**: Automatically filters out SPA index.html responses that would otherwise be reported as vulnerabilities
+- **Accurate Results**: Prevents reporting non-existent sensitive files (`/admin`, `/.env`, `/config.php`, etc.) as critical findings when they just return the SPA shell
 
 ### Code Structure:
 ```
@@ -90,7 +96,7 @@ This tool is created **ONLY** for:
 | **Next.js SSR** | 9 | Server-side rendering data exposure |
 | **Next.js RSC RCE** | 66 | CVE-2024-34351, CVE-2025-55182, CVE-2025-66478 |
 | **Next.js RSC Headers** | 34 | Middleware bypass headers |
-| **Next.js RSC POST** | 54 | POST payloads dengan berbagai teknik WAF bypass |
+| **Next.js RSC POST** | 54 | POST payloads with various WAF bypass techniques |
 | **Path Traversal** | 10 | Multiple encoding techniques |
 | **CF WAF Bypass** | 55 | URL encoding, unicode, null bytes, case manipulation |
 | **CF Specific Paths** | 16 | /cdn-cgi/, /.well-known/ paths |

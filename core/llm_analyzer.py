@@ -274,7 +274,7 @@ class LLMAnalyzer:
     
     def save_analysis(self, analyses, filename):
         """Save analysis to file"""
-        # Buat direktori jika belum ada
+        # Create directory if it doesn't exist
         output_dir = os.path.dirname(filename)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)

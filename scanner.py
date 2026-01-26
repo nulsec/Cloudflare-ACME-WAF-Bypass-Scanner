@@ -287,11 +287,11 @@ Reference: https://fearsoff.org/research/cloudflare-acme
             analyses = analyzer.analyze(scanner.results, verbose=args.verbose)
             
             if analyses:
-                # Selalu simpan ke file (default: reports/analysis.md)
+                # Always save to file (default: reports/analysis.md)
                 analysis_output = args.analysis_output or output_config.get('analysis_file', 'reports/analysis.md')
                 analyzer.save_analysis(analyses, analysis_output)
                 
-                # Hanya print ke terminal jika verbose
+                # Only print to terminal if verbose
                 if args.verbose:
                     analyzer.print_analysis(analyses, verbose=True)
                 else:
