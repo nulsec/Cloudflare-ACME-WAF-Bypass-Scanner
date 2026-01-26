@@ -34,6 +34,8 @@ class CloudflareScanner:
         self.oast_client = oast_client  # OAST client for blind vulnerability detection
         self.session = requests.Session()
         self.results = []
+        self.spa_baseline_length = None  # For SPA false positive detection
+        self.spa_baseline_hash = None
         
     def get_random_ua(self):
         """Get random user agent"""
@@ -53,6 +55,45 @@ class CloudflareScanner:
     def generate_payloads_with_token(self, payloads, token):
         """Replace {token} placeholder with actual token"""
         return [p.replace("{token}", token) for p in payloads]
+    
+    def detect_spa_baseline(self, target, token, headers):
+        """
+        Detect if target is a SPA with catch-all routing (false positive prevention)
+        SPA apps return same index.html for all non-existent paths
+        """
+        # Request a path that definitely doesn't exist
+        random_path = f"/.well-known/acme-challenge/{token}/../__nonexistent_path_xyz123__"
+        try:
+            resp = self.session.get(target + random_path, headers=headers, 
+                                   timeout=self.timeout, verify=False, allow_redirects=False)
+            if resp.status_code == 200:
+                self.spa_baseline_length = len(resp.content)
+                # Simple hash of first 500 chars for comparison
+                self.spa_baseline_hash = hash(resp.text[:500])
+                return True
+        except:
+            pass
+        return False
+    
+    def is_spa_false_positive(self, response):
+        """
+        Check if response is a SPA catch-all false positive
+        Returns True if response matches SPA baseline (same index.html)
+        """
+        if self.spa_baseline_length is None:
+            return False
+        
+        content_len = len(response.content)
+        # Allow 50 byte tolerance for minor differences
+        if abs(content_len - self.spa_baseline_length) < 50:
+            # Double check with hash if lengths are similar
+            response_hash = hash(response.text[:500])
+            if response_hash == self.spa_baseline_hash:
+                return True
+            # Even if hash differs slightly, same length with HTML content is likely SPA
+            if 'text/html' in response.headers.get('Content-Type', ''):
+                return True
+        return False
     
     def check_cloudflare(self, response):
         """Check if target is using Cloudflare"""
@@ -393,6 +434,11 @@ class CloudflareScanner:
             
             cf_status = f"{Fore.YELLOW}[CF Protected]{Style.RESET_ALL}" if results['cloudflare'] else f"{Fore.GREEN}[No CF]{Style.RESET_ALL}"
             print(f"  {cf_status} Baseline Status: {baseline_resp.status_code}")
+            
+            # Step 1.5: Detect SPA catch-all for false positive prevention
+            self.detect_spa_baseline(target, token, headers)
+            if self.spa_baseline_length:
+                print(f"  {Fore.YELLOW}[*] SPA detected (baseline: {self.spa_baseline_length} bytes) - filtering false positives{Style.RESET_ALL}")
             
             # Step 2: Test WAF Bypass
             tokens_to_test = [
@@ -1050,6 +1096,7 @@ class CloudflareScanner:
             # Step 12: Test Sensitive Paths via ACME bypass
             print(f"  {Fore.CYAN}[*] Testing sensitive paths via ACME bypass...{Style.RESET_ALL}")
             
+            sensitive_found_count = 0
             for path in SENSITIVE_PATHS:
                 if self.delay > 0:
                     time.sleep(self.delay)
@@ -1062,6 +1109,10 @@ class CloudflareScanner:
                                            allow_redirects=False, verify=False)
                     
                     if resp.status_code == 200:
+                        # Skip SPA false positives (catch-all routing returns same index.html)
+                        if self.is_spa_false_positive(resp):
+                            continue
+                        
                         content = resp.text.lower()
                         
                         sensitive_indicators = [
@@ -1074,6 +1125,7 @@ class CloudflareScanner:
                         
                         if any(ind in content for ind in sensitive_indicators):
                             print(f"  {Fore.RED}[CRITICAL]{Style.RESET_ALL} Sensitive data via ACME: {path}")
+                            sensitive_found_count += 1
                             
                             results['findings'].append({
                                 'type': 'Sensitive Path Exposure',
@@ -1084,11 +1136,15 @@ class CloudflareScanner:
                                 'critical': True
                             })
                         elif len(resp.content) > 50:
-                            if self.verbose:
+                            # Only show if verbose AND not a SPA false positive
+                            if self.verbose and not self.is_spa_false_positive(resp):
                                 print(f"  {Fore.YELLOW}[CHECK]{Style.RESET_ALL} Path accessible: {path}")
                         
                 except requests.RequestException:
                     pass
+            
+            if sensitive_found_count == 0 and self.spa_baseline_length:
+                print(f"  {Fore.GREEN}[*] No real sensitive paths found (SPA false positives filtered){Style.RESET_ALL}")
             
             # Step 13: Test GraphQL introspection
             print(f"  {Fore.CYAN}[*] Testing GraphQL introspection...{Style.RESET_ALL}")
@@ -1105,6 +1161,10 @@ class CloudflareScanner:
                                            allow_redirects=False, verify=False)
                     
                     if resp.status_code == 200:
+                        # Skip SPA false positives
+                        if self.is_spa_false_positive(resp):
+                            continue
+                            
                         content = resp.text.lower()
                         
                         if '__schema' in content or 'types' in content or 'querytype' in content:
